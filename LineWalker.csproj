@@ -1,15 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Version>1.0.0-beta</Version>
+        <Nullable>enable</Nullable>
+        <Version>0.1.0-alpha</Version>
         <Title>LineWalker</Title>
-        <Authors>REDCODE Soft</Authors>
+        <Authors>Samuele Lorefice</Authors>
         <Description>Lightweight, quick and simple to use, console-only logger library. </Description>
-        <PackageTags>console;logging;</PackageTags>
+        <PackageTags>console logging linewalker</PackageTags>
+        <Copyright>Copyright © 2025 Samuele Lorefice</Copyright>
+        <RepositoryUrl>https://github.com/SamueleLorefice/LineWalker.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <TargetFrameworks>net8.0;net8.0-windows</TargetFrameworks>
+        <PackageReadmeFile>Readme.md</PackageReadmeFile>
+        <PreRelease>beta</PreRelease>
     </PropertyGroup>
-
+    
+    <ItemGroup>
+        <None Include="Readme.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+    
 </Project>
