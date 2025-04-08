@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Version>1.0.0-beta</Version>
+        <Title>LineWalker</Title>
+        <Authors>REDCODE Soft</Authors>
+        <Description>Lightweight, quick and simple to use, console-only logger library. </Description>
+        <PackageTags>console;logging;</PackageTags>
+    </PropertyGroup>
+
+</Project>
