@@ -1,8 +1,10 @@
 name: Nuget Pkg Build
 on:
+  workflow_dispatch:
   push:
     tags:
       - v*
+  
 jobs:
   build:
     runs-on: ubuntu-latest
