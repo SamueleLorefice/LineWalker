@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Net.Quic;
 
 namespace LineWalker;
 
@@ -16,20 +17,46 @@ public record Message(string Text, bool UpdatePrevious = false, LogLevel Level =
 
 public class Logger {
     private static Logger? _logger;
-    private readonly Thread _loggerThread;
+    private Thread _loggerThread;
     private bool _running = true;
     private readonly ConcurrentQueue<Message> _messageQueue;
     private int lastMessageLength = 0;
     private int lastMessageLines = 0;
 
+    /// <summary>
+    /// How many messages are currently in the queue waiting to be output.
+    /// </summary>
+    public int QueueCount => lastMessageLength;
+
+    /// <summary>
+    /// Gets the singleton instance of the logger.
+    /// </summary>
+    /// <remarks>
+    /// If an instance does not exist yet, it creates a new instance of the logger.
+    /// </remarks>
+    /// <returns>reference to the <see cref="Logger"/> instance.</returns>
     public static Logger GetInstance() {
         return _logger ??= new Logger();
     }
-
+    
+    /// <summary>
+    /// Shuts down the logger and waits for the logger thread to finish.
+    /// </summary>
+    public static void Shutdown() {
+        if (_logger == null) return;
+        _logger._running = false;
+        _logger._loggerThread.Join();
+        _logger = null;
+    }
+    
     private Logger() {
         // Initialize the queue
         _messageQueue = new();
-        _loggerThread = new(() => { while (_running || !_messageQueue.IsEmpty) LogNext(); });
+        _loggerThread = new(() => { 
+            while (_running)
+                if(!_messageQueue.IsEmpty) LogNext();
+        });
+        _loggerThread.Start();
     }
 
     private void LogNext() {
@@ -46,13 +73,13 @@ public class Logger {
                 if (line.Length < lastMessageLength) line += new string(' ', lastMessageLength - line.Length);
             }
             //merge the array of lines into a single string
-            message.Text = lines.Aggregate("", (_, x) => x + Environment.NewLine);
+            message.Text = string.Join(Environment.NewLine, lines);
             //Get current cursor position
             var pos = Console.GetCursorPosition();
             //move cursor to the last message initial position
             Console.SetCursorPosition(0, pos.Top - lastMessageLines);
             //check if the message is shorter than the last message in terms of lines
-            if (lastMessageLines >= maxLines) {
+            if (lastMessageLines > maxLines) {
                 //pad the message with new lines to make it as long as the last message
                 string pad = Environment.NewLine + new string(' ', lastMessageLength);
                 for (int i = 0; i <= maxLines - lastMessageLines; i++) message.Text += pad;
@@ -84,11 +111,18 @@ public class Logger {
         lastMessageLines = maxLines;
     }
 
-    public void Log(string message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) {
-        //add the message to the queue
-        _messageQueue.Enqueue(new (message, updatePrevious));
-    }
-    
+    /// <summary>
+    /// Enqueues a new message to be logged.
+    /// </summary>
+    /// <param name="message"><see cref="string"/> containing the message to be logged.</param>
+    /// <param name="Level"><see cref="LogLevel"/> for this message. Sets colored console output.</param>
+    /// <param name="updatePrevious">Whether the previous line should be replaced by this message.</param>
+    public void Log(string message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message, updatePrevious, Level));
+
+    public void Log(string[] message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (string.Join(Environment.NewLine, message), updatePrevious, Level));
+
+    public void Log(object message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message.ToString() ?? "NULL", updatePrevious, Level));
+
     ~Logger() {
         _running = false;
         _loggerThread.Join();
