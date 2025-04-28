@@ -115,12 +115,39 @@ public class Logger {
     /// Enqueues a new message to be logged.
     /// </summary>
     /// <param name="message"><see cref="string"/> containing the message to be logged.</param>
+    /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
+    public void Log(string message, bool updatePrevious = false) => _messageQueue.Enqueue(new (message, updatePrevious));
+    
+    
+    /// <summary>
+    /// Enqueues a new message to be logged.
+    /// </summary>
+    /// <param name="message"><see cref="T:string[]"/> containing the message to be logged.</param>
+    /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
+    public void Log(string[] message, bool updatePrevious = false) => _messageQueue.Enqueue(new (string.Join(Environment.NewLine, message), updatePrevious));
+    
+    /// <summary>
+    /// Enqueues a new message to be logged.
+    /// </summary>
+    /// <param name="message"><see cref="string"/> containing the message to be logged.</param>
     /// <param name="Level"><see cref="LogLevel"/> for this message. Sets colored console output.</param>
-    /// <param name="updatePrevious">Whether the previous line should be replaced by this message.</param>
-    public void Log(string message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message, updatePrevious, Level));
+    /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
+    public void Log(string message, LogLevel Level, bool updatePrevious = false) => _messageQueue.Enqueue(new (message, updatePrevious, Level));
 
-    public void Log(string[] message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (string.Join(Environment.NewLine, message), updatePrevious, Level));
-
+    /// <summary>
+    /// Enqueues a new message to be logged.
+    /// </summary>
+    /// <param name="message"><see cref="T:string[]"/> containing the message to be logged.</param>
+    /// <param name="Level"><see cref="LogLevel"/> for this message. Sets colored console output.</param>
+    /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
+    public void Log(string[] message, LogLevel Level, bool updatePrevious = false) => _messageQueue.Enqueue(new (string.Join(Environment.NewLine, message), updatePrevious, Level));
+    
+    /// <summary>
+    /// Enqueues a new message to be logged.
+    /// </summary>
+    /// <param name="message"><see cref="object"/> whose strign representation is going to be logged.</param>
+    /// <param name="Level"><see cref="LogLevel"/> for this message. Sets colored console output.</param>
+    /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
     public void Log(object message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message.ToString() ?? "NULL", updatePrevious, Level));
 
     ~Logger() {
