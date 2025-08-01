@@ -26,7 +26,7 @@ public class Logger {
     /// <summary>
     /// How many messages are currently in the queue waiting to be output.
     /// </summary>
-    public int QueueCount => lastMessageLength;
+    public int QueueCount => _messageQueue.Count;
 
     /// <summary>
     /// Gets the singleton instance of the logger.

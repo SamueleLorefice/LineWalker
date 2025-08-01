@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <Nullable>enable</Nullable>
-        <Version>0.1.2-alpha</Version>
+        <Version>0.1.3-alpha</Version>
         <Title>LineWalker</Title>
         <Authors>Samuele Lorefice</Authors>
         <Description>Lightweight, quick and simple to use, console-only logger library. </Description>
