@@ -12,4 +12,14 @@ logger.Log("Finished!", updatePrevious:true);
 Thread.Sleep(250);
 logger.Log("DONE!", updatePrevious:false);
 
-Environment.Exit(0);
+// Wait for all messages to be processed before exiting
+while (logger.QueueCount > 0)
+{
+    Thread.Sleep(50);
+}
+
+// Give a little extra time for the last message to be processed
+Thread.Sleep(100);
+
+// Properly shutdown the logger
+Logger.Shutdown();
