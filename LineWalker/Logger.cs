@@ -1,27 +1,18 @@
 ﻿using System.Collections.Concurrent;
-using System.Net.Quic;
 
 namespace LineWalker;
 
-public enum LogLevel {
-    Debug,
-    Info,
-    Warning,
-    Error,
-    Critical
-}
-
-public record Message(string Text, bool UpdatePrevious = false, LogLevel Level = LogLevel.Info) {
-    public string Text { get; set; } = Text;
-}
-
-public class Logger {
+/// <summary>
+/// Logger class that handles logging messages in a separate thread.
+/// It uses a concurrent queue to store messages and processes them on it's own thread.
+/// </summary>
+public class Logger : IDisposable {
     private static Logger? _logger;
-    private Thread _loggerThread;
-    private bool _running = true;
+    private readonly Thread _loggerThread;
     private readonly ConcurrentQueue<Message> _messageQueue;
-    private int lastMessageLength = 0;
-    private int lastMessageLines = 0;
+    private int lastMessageLength;
+    private int lastMessageLines;
+    private readonly CancellationTokenSource _cts = new();
 
     /// <summary>
     /// How many messages are currently in the queue waiting to be output.
@@ -35,30 +26,30 @@ public class Logger {
     /// If an instance does not exist yet, it creates a new instance of the logger.
     /// </remarks>
     /// <returns>reference to the <see cref="Logger"/> instance.</returns>
-    public static Logger GetInstance() {
-        return _logger ??= new Logger();
-    }
-    
+    public static Logger GetInstance() => _logger ??= new();
+
     /// <summary>
     /// Shuts down the logger and waits for the logger thread to finish.
     /// </summary>
     public static void Shutdown() {
         if (_logger == null) return;
-        _logger._running = false;
         _logger._loggerThread.Join();
         _logger = null;
     }
     
-    private Logger() {
+    internal Logger() {
+        var token = _cts.Token;
+        
         // Initialize the queue
         _messageQueue = new();
         _loggerThread = new(() => { 
-            while (_running)
+            while (!token.IsCancellationRequested)
                 if(!_messageQueue.IsEmpty) LogNext();
         });
+        
         _loggerThread.Start();
     }
-
+    
     private void LogNext() {
         if (!_messageQueue.TryDequeue(out var message)) return;
         string[] lines = message.Text.Split(Environment.NewLine);
@@ -89,13 +80,8 @@ public class Logger {
         var col = Console.ForegroundColor;
         var bgcol = Console.BackgroundColor;
 
-        Console.ForegroundColor = message.Level switch {
-            LogLevel.Debug => ConsoleColor.DarkGray,
-            LogLevel.Warning => ConsoleColor.Yellow,
-            LogLevel.Error => ConsoleColor.Red,
-            LogLevel.Critical => ConsoleColor.DarkRed,
-            _ => Console.ForegroundColor
-        };
+        Console.ForegroundColor = GetFgColor(message.Level);
+        Console.BackgroundColor = GetBgColor(message.Level);
         
         //write the message
         Console.WriteLine(message.Text);
@@ -109,6 +95,30 @@ public class Logger {
         //update the last message length and lines
         lastMessageLength = maxLen;
         lastMessageLines = maxLines;
+    }
+
+    private static ConsoleColor GetFgColor(LogLevel level) {
+        return level switch {
+            LogLevel.Trace => ConsoleColor.Gray,
+            LogLevel.Debug => ConsoleColor.DarkGray,
+            LogLevel.Info => ConsoleColor.White,
+            LogLevel.Warning => ConsoleColor.Yellow,
+            LogLevel.Error => ConsoleColor.Red,
+            LogLevel.Critical => ConsoleColor.DarkRed,
+            _ => Console.ForegroundColor
+        };
+    }
+
+    private static ConsoleColor GetBgColor(LogLevel level) {
+        return level switch {
+            LogLevel.Trace => ConsoleColor.Black,
+            LogLevel.Debug => ConsoleColor.Black,
+            LogLevel.Info => ConsoleColor.Black,
+            LogLevel.Warning => ConsoleColor.Black,
+            LogLevel.Error => ConsoleColor.Black,
+            LogLevel.Critical => ConsoleColor.Black,
+            _ => Console.BackgroundColor
+        };
     }
 
     /// <summary>
@@ -149,9 +159,17 @@ public class Logger {
     /// <param name="Level"><see cref="LogLevel"/> for this message. Sets colored console output.</param>
     /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
     public void Log(object message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message.ToString() ?? "NULL", updatePrevious, Level));
-
-    ~Logger() {
-        _running = false;
+    
+    private void ReleaseThread() {
+        _cts.Cancel();
         _loggerThread.Join();
     }
+
+    /// <inheritdoc />
+    public void Dispose() {
+        ReleaseThread();
+        GC.SuppressFinalize(this);
+    }
+
+    ~Logger() => ReleaseThread();
 }
