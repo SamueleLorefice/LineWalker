@@ -37,6 +37,8 @@ public class Logger : IDisposable {
         _logger = null;
     }
     
+    public LogLevel MinLogLevel { get; set; } = LogLevel.Trace;
+    
     internal Logger() {
         var token = _cts.Token;
         
@@ -52,6 +54,7 @@ public class Logger : IDisposable {
     
     private void LogNext() {
         if (!_messageQueue.TryDequeue(out var message)) return;
+        if (message.Level < MinLogLevel) return; //skip messages below the minimum log level
         string[] lines = message.Text.Split(Environment.NewLine);
         int maxLen = lines.Max(x => x.Length);
         int maxLines = lines.Length;
