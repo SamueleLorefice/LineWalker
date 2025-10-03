@@ -71,7 +71,8 @@ public class Logger : IDisposable {
             //Get current cursor position
             var pos = Console.GetCursorPosition();
             //move cursor to the last message initial position
-            Console.SetCursorPosition(0, pos.Top - lastMessageLines);
+            try { Console.SetCursorPosition(0, pos.Top - lastMessageLines); }
+            catch (ArgumentOutOfRangeException) { /*ignored, happens when the console is resized smaller than the current cursor position*/ }
             //check if the message is shorter than the last message in terms of lines
             if (lastMessageLines > maxLines) {
                 //pad the message with new lines to make it as long as the last message
