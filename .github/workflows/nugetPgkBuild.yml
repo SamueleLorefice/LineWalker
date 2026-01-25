@@ -21,8 +21,8 @@ jobs:
           8.x
     - name: Build
       run: dotnet build LineWalker -c Release
-    #- name: Test
-    #  run: dotnet test -c Release --no-build
+    - name: Test
+      run: dotnet test -c Release --no-build
     - name: Pack nugets
       run: dotnet pack LineWalker -c Release --no-build --output . --include-symbols --include-source -p:SymbolPackageFormat=snupkg
     - name: Push to NuGet

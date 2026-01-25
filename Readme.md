@@ -34,3 +34,11 @@ Goodbye, World!
 Loading... 100% done
 */
 ```
+
+## Development
+
+Build and test:
+```bash
+dotnet build
+dotnet test
+```
