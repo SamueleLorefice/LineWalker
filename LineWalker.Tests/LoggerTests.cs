@@ -1,5 +1,3 @@
-using LineWalker;
-
 namespace LineWalker.Tests;
 
 public class LoggerTests : IDisposable {
@@ -263,19 +261,27 @@ public class LoggerTests : IDisposable {
     public void Log_WithDifferentLogLevels_ResetsColorAfterNonInfo() {
         // Arrange
         var logger = Logger.GetInstance();
+        _mockConsole.ForegroundColor = ConsoleColor.Green;
+        _mockConsole.BackgroundColor = ConsoleColor.DarkBlue;
         var originalFg = _mockConsole.ForegroundColor;
         var originalBg = _mockConsole.BackgroundColor;
 
         // Act
         logger.Log("Warning message", LogLevel.Warning);
         Thread.Sleep(50);
+
+        // Assert - colors should be restored after warning
+        Assert.Equal(originalFg, _mockConsole.ForegroundColor);
+        Assert.Equal(originalBg, _mockConsole.BackgroundColor);
+
+        // Act again
         logger.Log("Info message", LogLevel.Info);
-        Thread.Sleep(100);
+        Thread.Sleep(120);
 
         // Assert
         Assert.Equal(2, _mockConsole.WrittenLines.Count);
-        // After warning (non-Info), colors should be reset
-        // The implementation resets to the color that was current before the warning
+        Assert.Equal((ConsoleColor.Yellow, ConsoleColor.Black), _mockConsole.ColorChanges[0]);
+        Assert.Equal((ConsoleColor.White, ConsoleColor.Black), _mockConsole.ColorChanges[1]);
     }
 
     [Fact]

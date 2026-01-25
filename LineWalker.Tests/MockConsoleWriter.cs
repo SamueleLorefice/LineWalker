@@ -1,5 +1,3 @@
-using LineWalker;
-
 namespace LineWalker.Tests;
 
 /// <summary>
