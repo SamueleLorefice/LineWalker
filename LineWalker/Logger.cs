@@ -20,6 +20,8 @@ public class Logger : IDisposable {
     
     /// <summary>
     /// Maximum number of messages to batch together in a single flush operation.
+    /// This value balances reducing the number of console write calls (by batching)
+    /// against increased memory usage and latency before messages are visible.
     /// </summary>
     public static int MaxBatchSize { get; set; } = 100;
 
@@ -37,20 +39,24 @@ public class Logger : IDisposable {
     /// <returns>reference to the <see cref="Logger"/> instance.</returns>
     public static Logger GetInstance() => _logger ??= new();
 
+    private static readonly object _configLock = new();
+    
     /// <summary>
     /// Configures the console writer for testing purposes.
     /// </summary>
     /// <param name="consoleWriter">The console writer implementation to use.</param>
     /// <remarks>
     /// This method should only be called before any logger instances are created or during test setup.
-    /// It is not thread-safe and should not be called concurrently with logging operations.
+    /// It is thread-safe and will throw if a logger instance is already active.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when a logger instance is already active.</exception>
     public static void Configure(IConsoleWriter consoleWriter) {
-        if (_logger != null) {
-            throw new InvalidOperationException("Cannot configure console writer while logger instance is active. Call Shutdown() first.");
+        lock (_configLock) {
+            if (_logger != null) {
+                throw new InvalidOperationException("Cannot configure console writer while logger instance is active. Call Shutdown() first.");
+            }
+            _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
         }
-        _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
     }
 
     /// <summary>
