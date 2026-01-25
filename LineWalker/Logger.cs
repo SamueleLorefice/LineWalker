@@ -8,6 +8,7 @@ namespace LineWalker;
 /// </summary>
 public class Logger : IDisposable {
     private static Logger? _logger;
+    private static IConsoleWriter _consoleWriter = new SystemConsoleWriter();
     private readonly Thread _loggerThread;
     private readonly ConcurrentQueue<Message> _messageQueue;
     private int lastMessageLength;
@@ -29,11 +30,19 @@ public class Logger : IDisposable {
     public static Logger GetInstance() => _logger ??= new();
 
     /// <summary>
+    /// Configures the console writer for testing purposes.
+    /// </summary>
+    /// <param name="consoleWriter">The console writer implementation to use.</param>
+    public static void Configure(IConsoleWriter consoleWriter) {
+        _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
+    }
+
+    /// <summary>
     /// Shuts down the logger and waits for the logger thread to finish.
     /// </summary>
     public static void Shutdown() {
         if (_logger == null) return;
-        _logger._loggerThread.Join();
+        _logger.ReleaseThread();
         _logger = null;
     }
     
@@ -47,7 +56,9 @@ public class Logger : IDisposable {
         _loggerThread = new(() => { 
             while (!token.IsCancellationRequested)
                 if(!_messageQueue.IsEmpty) LogNext();
-        });
+        }) {
+            IsBackground = true
+        };
         
         _loggerThread.Start();
     }
@@ -55,6 +66,10 @@ public class Logger : IDisposable {
     private void LogNext() {
         if (!_messageQueue.TryDequeue(out var message)) return;
         if (message.Level < MinLogLevel) return; //skip messages below the minimum log level
+        
+        // Guard against null or empty messages
+        if (string.IsNullOrEmpty(message.Text)) return;
+        
         string[] lines = message.Text.Split(Environment.NewLine);
         int maxLen = lines.Max(x => x.Length);
         int maxLines = lines.Length;
@@ -68,11 +83,19 @@ public class Logger : IDisposable {
             }
             //merge the array of lines into a single string
             message.Text = string.Join(Environment.NewLine, lines);
-            //Get current cursor position
-            var pos = Console.GetCursorPosition();
-            //move cursor to the last message initial position
-            try { Console.SetCursorPosition(0, pos.Top - lastMessageLines); }
-            catch (ArgumentOutOfRangeException) { /*ignored, happens when the console is resized smaller than the current cursor position*/ }
+            
+            //Get current cursor position and move cursor to the last message initial position
+            try {
+                var pos = _consoleWriter.GetCursorPosition();
+                _consoleWriter.SetCursorPosition(0, pos.Top - lastMessageLines);
+            }
+            catch (ArgumentOutOfRangeException) { 
+                /*ignored, happens when the console is resized smaller than the current cursor position*/ 
+            }
+            catch (IOException) { 
+                /*ignored, happens when console output is redirected or unavailable*/ 
+            }
+            
             //check if the message is shorter than the last message in terms of lines
             if (lastMessageLines > maxLines) {
                 //pad the message with new lines to make it as long as the last message
@@ -81,19 +104,24 @@ public class Logger : IDisposable {
             }
         }
 
-        var col = Console.ForegroundColor;
-        var bgcol = Console.BackgroundColor;
+        try {
+            var col = _consoleWriter.ForegroundColor;
+            var bgcol = _consoleWriter.BackgroundColor;
 
-        Console.ForegroundColor = GetFgColor(message.Level);
-        Console.BackgroundColor = GetBgColor(message.Level);
-        
-        //write the message
-        Console.WriteLine(message.Text);
-        
-        //reset the colors
-        if(message.Level != LogLevel.Info) {
-            Console.ForegroundColor = col;
-            Console.BackgroundColor = bgcol;
+            _consoleWriter.ForegroundColor = GetFgColor(message.Level);
+            _consoleWriter.BackgroundColor = GetBgColor(message.Level);
+            
+            //write the message
+            _consoleWriter.WriteLine(message.Text);
+            
+            //reset the colors
+            if(message.Level != LogLevel.Info) {
+                _consoleWriter.ForegroundColor = col;
+                _consoleWriter.BackgroundColor = bgcol;
+            }
+        }
+        catch (IOException) {
+            /*ignored, happens when console output is redirected or unavailable*/
         }
         
         //update the last message length and lines
@@ -109,7 +137,7 @@ public class Logger : IDisposable {
             LogLevel.Warning => ConsoleColor.Yellow,
             LogLevel.Error => ConsoleColor.Red,
             LogLevel.Critical => ConsoleColor.DarkRed,
-            _ => Console.ForegroundColor
+            _ => _consoleWriter.ForegroundColor
         };
     }
 
@@ -121,7 +149,7 @@ public class Logger : IDisposable {
             LogLevel.Warning => ConsoleColor.Black,
             LogLevel.Error => ConsoleColor.Black,
             LogLevel.Critical => ConsoleColor.Black,
-            _ => Console.BackgroundColor
+            _ => _consoleWriter.BackgroundColor
         };
     }
 
@@ -162,11 +190,24 @@ public class Logger : IDisposable {
     /// <param name="message"><see cref="object"/> whose strign representation is going to be logged.</param>
     /// <param name="Level"><see cref="LogLevel"/> for this message. Sets colored console output.</param>
     /// <param name="updatePrevious">Whether the previous logged line should be replaced by this message.</param>
-    public void Log(object message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message.ToString() ?? "NULL", updatePrevious, Level));
+    public void Log(object? message, LogLevel Level = LogLevel.Info, bool updatePrevious = false) => _messageQueue.Enqueue(new (message?.ToString() ?? "NULL", updatePrevious, Level));
     
     private void ReleaseThread() {
+        // Check if already cancelled
+        if (_cts.IsCancellationRequested) return;
+        
+        // Signal cancellation
         _cts.Cancel();
-        _loggerThread.Join();
+        
+        // Wait for the queue to drain completely
+        while (!_messageQueue.IsEmpty) {
+            Thread.Sleep(10); // Small delay to allow processing
+        }
+        
+        // Wait for thread to finish
+        if (_loggerThread.IsAlive) {
+            _loggerThread.Join();
+        }
     }
 
     /// <inheritdoc />
