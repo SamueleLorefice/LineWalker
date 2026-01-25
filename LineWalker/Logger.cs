@@ -17,13 +17,27 @@ public class Logger : IDisposable {
     private int lastMessageLines;
     private readonly CancellationTokenSource _cts = new();
     private bool _lastMessageFlushed = true; // Track if the last message was flushed
+    private static int _maxBatchSize = 100;
     
     /// <summary>
     /// Maximum number of messages to batch together in a single flush operation.
     /// This value balances reducing the number of console write calls (by batching)
     /// against increased memory usage and latency before messages are visible.
     /// </summary>
-    public static int MaxBatchSize { get; set; } = 100;
+    public static int MaxBatchSize {
+        get => _maxBatchSize;
+        set {
+            // Enforce a reasonable positive range to avoid disabling batching
+            // or causing excessive memory usage/latency.
+            if (value < 1) {
+                _maxBatchSize = 1;
+            } else if (value > 10_000) {
+                _maxBatchSize = 10_000;
+            } else {
+                _maxBatchSize = value;
+            }
+        }
+    }
 
     /// <summary>
     /// How many messages are currently in the queue waiting to be output.
