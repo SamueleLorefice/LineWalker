@@ -72,6 +72,9 @@ public class Logger : IDisposable {
             }
             _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
             if (maxBatchSize.HasValue) {
+                if (maxBatchSize.Value <= 0) {
+                    throw new ArgumentOutOfRangeException(nameof(maxBatchSize), "maxBatchSize must be a positive integer.");
+                }
                 MaxBatchSize = maxBatchSize.Value;
             }
         }
