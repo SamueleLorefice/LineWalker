@@ -45,17 +45,21 @@ public class Logger : IDisposable {
     /// Configures the console writer for testing purposes.
     /// </summary>
     /// <param name="consoleWriter">The console writer implementation to use.</param>
+    /// <param name="maxBatchSize">Optional maximum number of messages to batch together. If not specified, keeps current value.</param>
     /// <remarks>
     /// This method should only be called before any logger instances are created or during test setup.
     /// It is thread-safe and will throw if a logger instance is already active.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when a logger instance is already active.</exception>
-    public static void Configure(IConsoleWriter consoleWriter) {
+    public static void Configure(IConsoleWriter consoleWriter, int? maxBatchSize = null) {
         lock (_configLock) {
             if (_logger != null) {
                 throw new InvalidOperationException("Cannot configure console writer while logger instance is active. Call Shutdown() first.");
             }
             _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
+            if (maxBatchSize.HasValue) {
+                MaxBatchSize = maxBatchSize.Value;
+            }
         }
     }
 

@@ -1,19 +1,9 @@
 namespace LineWalker;
 
 /// <summary>
-/// Default console writer that wraps System.Console with a stream writer.
+/// Default console writer that wraps System.Console.Out.
 /// </summary>
-public class SystemConsoleWriter : IConsoleWriter, IDisposable {
-    private readonly StreamWriter _streamWriter;
-    
-    public SystemConsoleWriter() {
-        // Open standard output and create a StreamWriter for better performance
-        var stdout = Console.OpenStandardOutput();
-        _streamWriter = new StreamWriter(stdout, Console.OutputEncoding, 1024, leaveOpen: true) {
-            AutoFlush = false // We'll control flushing manually for batching
-        };
-    }
-    
+public class SystemConsoleWriter : IConsoleWriter {
     public ConsoleColor ForegroundColor {
         get => Console.ForegroundColor;
         set => Console.ForegroundColor = value;
@@ -28,19 +18,14 @@ public class SystemConsoleWriter : IConsoleWriter, IDisposable {
 
     public void SetCursorPosition(int left, int top) {
         // Flush before cursor manipulation to ensure all output is written
-        _streamWriter.Flush();
+        Console.Out.Flush();
         Console.SetCursorPosition(left, top);
     }
 
-    public void WriteLine(string text) => _streamWriter.WriteLine(text);
+    public void WriteLine(string text) => Console.Out.WriteLine(text);
     
     /// <summary>
-    /// Flushes the stream writer to ensure all buffered output is written.
+    /// Flushes the console output to ensure all buffered output is written.
     /// </summary>
-    public void Flush() => _streamWriter.Flush();
-    
-    public void Dispose() {
-        _streamWriter.Flush();
-        _streamWriter.Dispose();
-    }
+    public void Flush() => Console.Out.Flush();
 }
