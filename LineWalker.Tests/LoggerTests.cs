@@ -298,4 +298,106 @@ public class LoggerTests : IDisposable {
         Assert.Equal("Loading...", _mockConsole.WrittenLines[0]);
         Assert.Contains("Loading... 100%", _mockConsole.WrittenLines[3]);
     }
+
+    [Fact]
+    public void Log_MultipleMessages_AreBatchedTogether() {
+        // Arrange
+        var logger = Logger.GetInstance();
+        
+        // Act - Log 10 messages rapidly
+        for (int i = 0; i < 10; i++) {
+            logger.Log($"Message {i}");
+        }
+        Thread.Sleep(150); // Wait for batch processing
+
+        // Assert - Messages should be batched, resulting in fewer flush calls than messages
+        Assert.Equal(10, _mockConsole.WrittenLines.Count);
+        // Should have at least one flush call after batch
+        Assert.NotEmpty(_mockConsole.FlushCalls);
+        // Should have fewer flush calls than messages (batching is working)
+        Assert.True(_mockConsole.FlushCalls.Count < _mockConsole.WrittenLines.Count);
+    }
+
+    [Fact]
+    public void Log_UpdatePreviousMessage_BreaksBatch() {
+        // Arrange
+        var logger = Logger.GetInstance();
+        
+        // Act - Log some messages, then an UpdatePrevious message
+        logger.Log("Message 1");
+        logger.Log("Message 2");
+        logger.Log("Message 3");
+        Thread.Sleep(50);
+        
+        var flushCountBeforeUpdate = _mockConsole.FlushCalls.Count;
+        
+        logger.Log("Update", updatePrevious: true);
+        Thread.Sleep(100);
+
+        // Assert - UpdatePrevious should trigger additional flushes
+        Assert.Equal(4, _mockConsole.WrittenLines.Count);
+        Assert.True(_mockConsole.FlushCalls.Count > flushCountBeforeUpdate);
+    }
+
+    [Fact]
+    public void Log_MaxBatchSize_IsRespected() {
+        // Arrange
+        var previousBatchSize = Logger.MaxBatchSize;
+        Logger.MaxBatchSize = 5;
+        var logger = Logger.GetInstance();
+        
+        try {
+            // Act - Log more messages than batch size
+            for (int i = 0; i < 15; i++) {
+                logger.Log($"Message {i}");
+            }
+            Thread.Sleep(150);
+
+            // Assert - All messages should be written
+            Assert.Equal(15, _mockConsole.WrittenLines.Count);
+            // Should have multiple batches due to batch size limit
+            Assert.True(_mockConsole.FlushCalls.Count >= 3);
+        } finally {
+            Logger.MaxBatchSize = previousBatchSize;
+        }
+    }
+
+    [Fact]
+    public void Log_FlushAfterEachBatch() {
+        // Arrange
+        var logger = Logger.GetInstance();
+        
+        // Act - Log messages in distinct groups with delays
+        logger.Log("Batch 1 - Message 1");
+        logger.Log("Batch 1 - Message 2");
+        Thread.Sleep(100); // Allow first batch to flush
+        
+        var flushCountAfterBatch1 = _mockConsole.FlushCalls.Count;
+        
+        logger.Log("Batch 2 - Message 1");
+        logger.Log("Batch 2 - Message 2");
+        Thread.Sleep(100); // Allow second batch to flush
+
+        // Assert
+        Assert.Equal(4, _mockConsole.WrittenLines.Count);
+        Assert.True(_mockConsole.FlushCalls.Count >= 2);
+        Assert.True(flushCountAfterBatch1 > 0);
+    }
+
+    [Fact]
+    public void Configure_WithMaxBatchSize_SetsValue() {
+        // Arrange
+        Logger.Shutdown();
+        var previousBatchSize = Logger.MaxBatchSize;
+        
+        try {
+            // Act
+            Logger.Configure(new MockConsoleWriter(), maxBatchSize: 50);
+
+            // Assert
+            Assert.Equal(50, Logger.MaxBatchSize);
+        } finally {
+            Logger.MaxBatchSize = previousBatchSize;
+        }
+    }
 }

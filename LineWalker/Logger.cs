@@ -8,12 +8,36 @@ namespace LineWalker;
 /// </summary>
 public class Logger : IDisposable {
     private static Logger? _logger;
+    // Note: Static console writer is intentionally not disposed to allow logger reuse across instances.
+    // For SystemConsoleWriter, the StreamWriter will be cleaned up on application exit.
     private static IConsoleWriter _consoleWriter = new SystemConsoleWriter();
     private readonly Thread _loggerThread;
     private readonly ConcurrentQueue<Message> _messageQueue;
     private int lastMessageLength;
     private int lastMessageLines;
     private readonly CancellationTokenSource _cts = new();
+    private bool _lastMessageFlushed = true; // Track if the last message was flushed
+    private static int _maxBatchSize = 100;
+    
+    /// <summary>
+    /// Maximum number of messages to batch together in a single flush operation.
+    /// This value balances reducing the number of console write calls (by batching)
+    /// against increased memory usage and latency before messages are visible.
+    /// </summary>
+    public static int MaxBatchSize {
+        get => _maxBatchSize;
+        set {
+            // Enforce a reasonable positive range to avoid disabling batching
+            // or causing excessive memory usage/latency.
+            if (value < 1) {
+                _maxBatchSize = 1;
+            } else if (value > 10_000) {
+                _maxBatchSize = 10_000;
+            } else {
+                _maxBatchSize = value;
+            }
+        }
+    }
 
     /// <summary>
     /// How many messages are currently in the queue waiting to be output.
@@ -29,12 +53,31 @@ public class Logger : IDisposable {
     /// <returns>reference to the <see cref="Logger"/> instance.</returns>
     public static Logger GetInstance() => _logger ??= new();
 
+    private static readonly object _configLock = new();
+    
     /// <summary>
     /// Configures the console writer for testing purposes.
     /// </summary>
     /// <param name="consoleWriter">The console writer implementation to use.</param>
-    public static void Configure(IConsoleWriter consoleWriter) {
-        _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
+    /// <param name="maxBatchSize">Optional maximum number of messages to batch together. If not specified, keeps current value.</param>
+    /// <remarks>
+    /// This method should only be called before any logger instances are created or during test setup.
+    /// It is thread-safe and will throw if a logger instance is already active.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">Thrown when a logger instance is already active.</exception>
+    public static void Configure(IConsoleWriter consoleWriter, int? maxBatchSize = null) {
+        lock (_configLock) {
+            if (_logger != null) {
+                throw new InvalidOperationException("Cannot configure console writer while logger instance is active. Call Shutdown() first.");
+            }
+            _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
+            if (maxBatchSize.HasValue) {
+                if (maxBatchSize.Value <= 0) {
+                    throw new ArgumentOutOfRangeException(nameof(maxBatchSize), "maxBatchSize must be a positive integer.");
+                }
+                MaxBatchSize = maxBatchSize.Value;
+            }
+        }
     }
 
     /// <summary>
@@ -70,11 +113,58 @@ public class Logger : IDisposable {
         // Guard against null or empty messages
         if (string.IsNullOrEmpty(message.Text)) return;
         
+        // Check if we can batch messages
+        // We can only batch if the current message doesn't update the previous line
+        if (!message.UpdatePrevious) {
+            var messagesToLog = new List<Message> { message };
+            
+            // Peek ahead and collect messages that can be batched
+            while (_messageQueue.TryPeek(out var nextMessage)) {
+                // Stop batching if next message needs to update previous line
+                if (nextMessage.UpdatePrevious) break;
+                
+                // Stop if we've collected enough messages (limit to prevent unbounded growth)
+                if (messagesToLog.Count >= MaxBatchSize) break;
+                
+                // Dequeue and add to batch
+                if (_messageQueue.TryDequeue(out nextMessage)) {
+                    if (nextMessage.Level >= MinLogLevel && !string.IsNullOrEmpty(nextMessage.Text)) {
+                        messagesToLog.Add(nextMessage);
+                    }
+                } else {
+                    break;
+                }
+            }
+            
+            // Write all batched messages
+            foreach (var msg in messagesToLog) {
+                WriteMessage(msg, false);
+            }
+            
+            // Flush the stream writer after writing the batch
+            _consoleWriter.Flush();
+            _lastMessageFlushed = true;
+        } else {
+            // Message needs to update previous, flush any pending output first (only if needed)
+            if (!_lastMessageFlushed) {
+                _consoleWriter.Flush();
+            }
+            
+            // Write the message with cursor manipulation
+            WriteMessage(message, true);
+            
+            // Flush immediately since we manipulated the cursor
+            _consoleWriter.Flush();
+            _lastMessageFlushed = true;
+        }
+    }
+    
+    private void WriteMessage(Message message, bool handleUpdatePrevious) {
         string[] lines = message.Text.Split(Environment.NewLine);
         int maxLen = lines.Max(x => x.Length);
         int maxLines = lines.Length;
 
-        if (message.UpdatePrevious) {
+        if (handleUpdatePrevious && message.UpdatePrevious) {
             //push all lines to be as long as the longest line on the previous message
             for (var index = 0; index < lines.Length; index++) {
                 ref var line = ref lines[index]; //grab the reference to the line
@@ -208,6 +298,9 @@ public class Logger : IDisposable {
         if (_loggerThread.IsAlive) {
             _loggerThread.Join();
         }
+        
+        // Flush any remaining output
+        _consoleWriter.Flush();
     }
 
     /// <inheritdoc />

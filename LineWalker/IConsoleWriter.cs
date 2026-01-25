@@ -28,4 +28,9 @@ public interface IConsoleWriter {
     /// Writes a line to the console.
     /// </summary>
     void WriteLine(string text);
+    
+    /// <summary>
+    /// Flushes any buffered output to the console.
+    /// </summary>
+    void Flush() { }
 }
