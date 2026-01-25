@@ -9,7 +9,7 @@ public class SystemConsoleWriter : IConsoleWriter, IDisposable {
     public SystemConsoleWriter() {
         // Open standard output and create a StreamWriter for better performance
         var stdout = Console.OpenStandardOutput();
-        _streamWriter = new StreamWriter(stdout) {
+        _streamWriter = new StreamWriter(stdout, Console.OutputEncoding, 1024, leaveOpen: true) {
             AutoFlush = false // We'll control flushing manually for batching
         };
     }
