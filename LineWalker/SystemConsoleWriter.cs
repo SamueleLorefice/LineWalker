@@ -1,7 +1,7 @@
 namespace LineWalker;
 
 /// <summary>
-/// Default console writer that wraps System.Console with a stream writer for higher performance.
+/// Default console writer that wraps System.Console with a stream writer.
 /// </summary>
 public class SystemConsoleWriter : IConsoleWriter, IDisposable {
     private readonly StreamWriter _streamWriter;

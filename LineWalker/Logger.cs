@@ -16,11 +16,12 @@ public class Logger : IDisposable {
     private int lastMessageLength;
     private int lastMessageLines;
     private readonly CancellationTokenSource _cts = new();
+    private bool _lastMessageFlushed = true; // Track if the last message was flushed
     
     /// <summary>
     /// Maximum number of messages to batch together in a single flush operation.
     /// </summary>
-    private const int MaxBatchSize = 100;
+    public static int MaxBatchSize { get; set; } = 100;
 
     /// <summary>
     /// How many messages are currently in the queue waiting to be output.
@@ -44,7 +45,11 @@ public class Logger : IDisposable {
     /// This method should only be called before any logger instances are created or during test setup.
     /// It is not thread-safe and should not be called concurrently with logging operations.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">Thrown when a logger instance is already active.</exception>
     public static void Configure(IConsoleWriter consoleWriter) {
+        if (_logger != null) {
+            throw new InvalidOperationException("Cannot configure console writer while logger instance is active. Call Shutdown() first.");
+        }
         _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
     }
 
@@ -111,15 +116,19 @@ public class Logger : IDisposable {
             
             // Flush the stream writer after writing the batch
             _consoleWriter.Flush();
+            _lastMessageFlushed = true;
         } else {
-            // Message needs to update previous, flush any pending output first
-            _consoleWriter.Flush();
+            // Message needs to update previous, flush any pending output first (only if needed)
+            if (!_lastMessageFlushed) {
+                _consoleWriter.Flush();
+            }
             
             // Write the message with cursor manipulation
             WriteMessage(message, true);
             
             // Flush immediately since we manipulated the cursor
             _consoleWriter.Flush();
+            _lastMessageFlushed = true;
         }
     }
     
