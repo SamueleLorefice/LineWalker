@@ -32,5 +32,5 @@ public interface IConsoleWriter {
     /// <summary>
     /// Flushes any buffered output to the console.
     /// </summary>
-    void Flush();
+    void Flush() { }
 }
