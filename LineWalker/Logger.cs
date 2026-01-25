@@ -8,12 +8,19 @@ namespace LineWalker;
 /// </summary>
 public class Logger : IDisposable {
     private static Logger? _logger;
+    // Note: Static console writer is intentionally not disposed to allow logger reuse across instances.
+    // For SystemConsoleWriter, the StreamWriter will be cleaned up on application exit.
     private static IConsoleWriter _consoleWriter = new SystemConsoleWriter();
     private readonly Thread _loggerThread;
     private readonly ConcurrentQueue<Message> _messageQueue;
     private int lastMessageLength;
     private int lastMessageLines;
     private readonly CancellationTokenSource _cts = new();
+    
+    /// <summary>
+    /// Maximum number of messages to batch together in a single flush operation.
+    /// </summary>
+    private const int MaxBatchSize = 100;
 
     /// <summary>
     /// How many messages are currently in the queue waiting to be output.
@@ -33,6 +40,10 @@ public class Logger : IDisposable {
     /// Configures the console writer for testing purposes.
     /// </summary>
     /// <param name="consoleWriter">The console writer implementation to use.</param>
+    /// <remarks>
+    /// This method should only be called before any logger instances are created or during test setup.
+    /// It is not thread-safe and should not be called concurrently with logging operations.
+    /// </remarks>
     public static void Configure(IConsoleWriter consoleWriter) {
         _consoleWriter = consoleWriter ?? throw new ArgumentNullException(nameof(consoleWriter));
     }
@@ -81,7 +92,7 @@ public class Logger : IDisposable {
                 if (nextMessage.UpdatePrevious) break;
                 
                 // Stop if we've collected enough messages (limit to prevent unbounded growth)
-                if (messagesToLog.Count >= 100) break;
+                if (messagesToLog.Count >= MaxBatchSize) break;
                 
                 // Dequeue and add to batch
                 if (_messageQueue.TryDequeue(out nextMessage)) {
