@@ -32,6 +32,10 @@ internal class MockConsoleWriter : IConsoleWriter {
         var lines = text.Split(Environment.NewLine).Length;
         _currentPosition = (_currentPosition.Left, _currentPosition.Top + lines);
     }
+    
+    public void Flush() {
+        // No-op for mock
+    }
 
     public void Clear() {
         _writtenLines.Clear();

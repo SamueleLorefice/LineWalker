@@ -70,11 +70,54 @@ public class Logger : IDisposable {
         // Guard against null or empty messages
         if (string.IsNullOrEmpty(message.Text)) return;
         
+        // Check if we can batch messages
+        // We can only batch if the current message doesn't update the previous line
+        if (!message.UpdatePrevious) {
+            var messagesToLog = new List<Message> { message };
+            
+            // Peek ahead and collect messages that can be batched
+            while (_messageQueue.TryPeek(out var nextMessage)) {
+                // Stop batching if next message needs to update previous line
+                if (nextMessage.UpdatePrevious) break;
+                
+                // Stop if we've collected enough messages (limit to prevent unbounded growth)
+                if (messagesToLog.Count >= 100) break;
+                
+                // Dequeue and add to batch
+                if (_messageQueue.TryDequeue(out nextMessage)) {
+                    if (nextMessage.Level >= MinLogLevel && !string.IsNullOrEmpty(nextMessage.Text)) {
+                        messagesToLog.Add(nextMessage);
+                    }
+                } else {
+                    break;
+                }
+            }
+            
+            // Write all batched messages
+            foreach (var msg in messagesToLog) {
+                WriteMessage(msg, false);
+            }
+            
+            // Flush the stream writer after writing the batch
+            _consoleWriter.Flush();
+        } else {
+            // Message needs to update previous, flush any pending output first
+            _consoleWriter.Flush();
+            
+            // Write the message with cursor manipulation
+            WriteMessage(message, true);
+            
+            // Flush immediately since we manipulated the cursor
+            _consoleWriter.Flush();
+        }
+    }
+    
+    private void WriteMessage(Message message, bool handleUpdatePrevious) {
         string[] lines = message.Text.Split(Environment.NewLine);
         int maxLen = lines.Max(x => x.Length);
         int maxLines = lines.Length;
 
-        if (message.UpdatePrevious) {
+        if (handleUpdatePrevious && message.UpdatePrevious) {
             //push all lines to be as long as the longest line on the previous message
             for (var index = 0; index < lines.Length; index++) {
                 ref var line = ref lines[index]; //grab the reference to the line
@@ -208,6 +251,9 @@ public class Logger : IDisposable {
         if (_loggerThread.IsAlive) {
             _loggerThread.Join();
         }
+        
+        // Flush any remaining output
+        _consoleWriter.Flush();
     }
 
     /// <inheritdoc />
