@@ -42,6 +42,5 @@ public class SystemConsoleWriter : IConsoleWriter, IDisposable {
     public void Dispose() {
         _streamWriter.Flush();
         _streamWriter.Dispose();
-        GC.SuppressFinalize(this);
     }
 }
